@@ -18,9 +18,10 @@ llm_url: ""
 # Web UI selectors for interacting with LLM interface
 selectors:
   input_box: ""
-  submit_button: ''
+  submit_button: ""
   output_box: ""
 
+searxng_url: "http://localhost"
 ```
 
 ### llm
