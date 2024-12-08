@@ -28,9 +28,9 @@ import (
 
 // Settings represents the application configuration
 type Settings struct {
-	seaxngURL string `yaml:"seaxng_url"`
-	LLM_URL   string `yaml:"llm_url"`
-	Selectors struct {
+	SearxngURL string `yaml:"searxng_url"`
+	LLM_URL    string `yaml:"llm_url"`
+	Selectors  struct {
 		InputBox     string `yaml:"input_box"`
 		SubmitButton string `yaml:"submit_button"`
 		OutputBox    string `yaml:"output_box"`
@@ -58,7 +58,7 @@ func searchWeb(query string) (*SearchResponse, error) {
 	// Encode the query parameter
 	encodedQuery := url.QueryEscape(query)
 
-	searchURL := fmt.Sprintf(settings.seaxngURL+"/search?q=%s&format=json", encodedQuery)
+	searchURL := fmt.Sprintf("%s/search?q=%s&format=json", settings.SearxngURL, encodedQuery)
 
 	resp, err := http.Get(searchURL)
 	if err != nil {
