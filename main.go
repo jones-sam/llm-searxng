@@ -353,7 +353,7 @@ func submitQuery(llmInput string) error {
 	defer cancel()
 
 	bm := browser.NewBrowserManager()
-	bmErr := bm.Start()
+	bmErr := bm.Start(true)
 	if bmErr != nil {
 		return fmt.Errorf("failed to start browser: %v", bmErr)
 	}
@@ -666,6 +666,32 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case tea.KeyCtrlC:
 			return m, tea.Quit
+		case tea.KeyCtrlO:
+			// Open browser for setup
+			go func() {
+				bm := browser.NewBrowserManager()
+				if err := bm.Start(false); err != nil {
+					program.Send(fmt.Errorf("failed to start browser: %v", err))
+					return
+				}
+				defer bm.Stop()
+
+				page, err := bm.Navigate(settings.LLM_URL)
+				if err != nil {
+					program.Send(fmt.Errorf("failed to navigate: %v", err))
+					return
+				}
+
+				// Save the URL after successful navigation
+				time.Sleep(2 * time.Second) // Give time for any redirects
+				if currentURL := page.MustInfo().URL; currentURL != settings.LLM_URL {
+					chatURL = currentURL
+				}
+
+				// Keep the browser open until user closes it
+				<-page.Browser().GetContext().Done()
+			}()
+			return m, nil
 		case tea.KeyCtrlF:
 			m.searchEnabled = !m.searchEnabled
 			return m, nil
@@ -853,6 +879,7 @@ func (m model) View() string {
 		searchStatus = "ON"
 	}
 	s.WriteString(fmt.Sprintf("search: %s • ctrl+f to toggle • ", searchStatus))
+	s.WriteString("ctrl+o to open browser • ")
 	s.WriteString("ctrl+c to quit)")
 
 	if m.err != nil {

@@ -19,9 +19,9 @@ func NewBrowserManager() *BrowserManager {
 	return &BrowserManager{}
 }
 
-func (bm *BrowserManager) Start() error {
+func (bm *BrowserManager) Start(headless bool) error {
 	url := launcher.New().
-		Headless(true).
+		Headless(headless).
 		Devtools(false).
 		Set("ozone-platform", "wayland").
 		Set("disable-blink-features", "AutomationControlled").

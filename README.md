@@ -23,3 +23,10 @@ selectors:
 
 ```
 
+### llm
+
+You can try to use this on any LLM site, however some may notice it is a bot and limit usage. Use at your own risk. You'll need to inspect element to find the main input text box to submit messages, the submit button to send messages, and the output box to capture the message from the LLM. 
+
+If you need to sign in to access the LLM web interface or do anything else in the site to make it work, use `ctrl-o` to open the browser in a non-headless mode.
+
+
