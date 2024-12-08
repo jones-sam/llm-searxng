@@ -1,4 +1,5 @@
 settings.yaml
+llm-searxng
 
 # Binaries for programs and plugins
 *.exe
