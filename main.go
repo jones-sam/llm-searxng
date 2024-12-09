@@ -39,6 +39,27 @@ type Settings struct {
 
 var settings Settings
 
+// Style definitions
+var (
+	userStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#AE81FF")). // Purple
+			PaddingLeft(1).
+			PaddingRight(1).
+			MarginBottom(1)
+
+	aiStyleNormal = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#66D9EF")). // Light blue
+			PaddingLeft(1).
+			PaddingRight(1).
+			MarginBottom(1)
+
+	aiStyleSearch = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FD971F")). // Orange
+			PaddingLeft(1).
+			PaddingRight(1).
+			MarginBottom(1)
+)
+
 // SearchResult represents a single result from the search engine
 type SearchResult struct {
 	URL     string `json:"url"`
@@ -527,6 +548,51 @@ func submitQuery(llmInput string) error {
 	return nil
 }
 
+func processQuery(query string, m *model) {
+	if m.searchEnabled {
+		// First stage: Searching
+		searchResponse, err := searchWeb(query)
+		if err != nil {
+			m.err = err
+			program.Send(loadingMsg{state: stateIdle, loading: false})
+			return
+		}
+		program.Send(loadingMsg{state: stateGenerating, loading: true})
+
+		var result string
+		if m.searchEnabled {
+			// Second stage: Generating prompt
+			result, err = promptGen(*searchResponse)
+			if err != nil {
+				m.err = err
+				program.Send(loadingMsg{state: stateIdle, loading: false})
+				return
+			}
+		} else {
+			// Direct LLM interaction without search
+			result = query
+		}
+		program.Send(loadingMsg{state: stateSubmitting, loading: true})
+
+		// Third stage: Submitting to LLM
+		err = submitQuery(result)
+		if err != nil {
+			m.err = err
+			program.Send(loadingMsg{state: stateIdle, loading: false})
+			return
+		}
+		// Don't send idle state here as submitQuery will handle it
+	} else {
+		// Direct LLM interaction without search
+		err := submitQuery(query)
+		if err != nil {
+			m.err = err
+			program.Send(loadingMsg{state: stateIdle, loading: false})
+			return
+		}
+	}
+}
+
 type loadingState int
 
 const (
@@ -565,7 +631,7 @@ type model struct {
 	loadingMessage string
 	messages       []string
 	viewportFocus  bool
-	searchEnabled  bool // New field to track search state
+	searchEnabled  bool
 }
 
 var chatURL string = ""
@@ -591,15 +657,40 @@ func initialModel() model {
 		BorderForeground(lipgloss.Color("#666666")) // Darker gray for border
 	vp.YPosition = 0
 
-	return model{
-		textarea:     ti,
-		spinner:      s,
-		viewport:     vp,
-		err:          nil,
-		loading:      false,
-		loadingState: stateIdle,
-		messages:     []string{},
+	model := model{
+		textarea:       ti,
+		spinner:        s,
+		viewport:       vp,
+		err:            nil,
+		loading:        false,
+		loadingState:   stateIdle,
+		loadingMessage: "",
+		messages:       []string{},
+		viewportFocus:  false,
+		searchEnabled:  true,
 	}
+
+	if len(os.Args) > 1 {
+		query := strings.Join(os.Args[1:], " ")
+		model.loading = true
+		model.loadingState = stateSearching
+		model.loadingMessage = "Searching the web"
+
+		// Format user message with proper styling
+		width := vp.Width - 6
+		formattedMessage := fmt.Sprintf("You: %s", query)
+		styledMessage := userStyle.Render(lipgloss.NewStyle().Width(width).Render(formattedMessage))
+		model.messages = append(model.messages, styledMessage)
+
+		// Set initial viewport content
+		vp.SetContent(styledMessage)
+
+		go func() {
+			processQuery(query, &model)
+		}()
+	}
+
+	return model
 }
 
 func (m model) Init() tea.Cmd {
@@ -721,49 +812,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				go func() {
-					if m.searchEnabled {
-						// First stage: Searching
-						searchResponse, err := searchWeb(query)
-						if err != nil {
-							m.err = err
-							program.Send(loadingMsg{state: stateIdle, loading: false})
-							return
-						}
-						program.Send(loadingMsg{state: stateGenerating, loading: true})
-
-						var result string
-						if m.searchEnabled {
-							// Second stage: Generating prompt
-							result, err = promptGen(*searchResponse)
-							if err != nil {
-								m.err = err
-								program.Send(loadingMsg{state: stateIdle, loading: false})
-								return
-							}
-						} else {
-							// Direct LLM interaction without search
-							result = query
-						}
-						program.Send(loadingMsg{state: stateSubmitting, loading: true})
-
-						// Third stage: Submitting to LLM
-						err = submitQuery(result)
-						if err != nil {
-							m.err = err
-							program.Send(loadingMsg{state: stateIdle, loading: false})
-							return
-						}
-						// Don't send idle state here as submitQuery will handle it
-					} else {
-						// Direct LLM interaction without search
-						err := submitQuery(query)
-						if err != nil {
-							m.err = err
-							program.Send(loadingMsg{state: stateIdle, loading: false})
-							return
-						}
-					}
-
+					processQuery(query, &m)
 				}()
 
 				m.textarea.Placeholder = "Type new message here and press Ctrl+S to submit"
@@ -787,27 +836,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case chatMsg:
 		// Account for viewport padding (2 on each side) and border (1 on each side)
 		width := m.viewport.Width - 6
-
-		userStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#AE81FF")). // Purple
-			Width(width).
-			PaddingLeft(1).
-			PaddingRight(1).
-			MarginBottom(1)
-
-		aiStyleNormal := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#66D9EF")). // Light blue
-			Width(width).
-			PaddingLeft(1).
-			PaddingRight(1).
-			MarginBottom(1)
-
-		aiStyleSearch := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FD971F")).
-			Width(width).
-			PaddingLeft(1).
-			PaddingRight(1).
-			MarginBottom(1)
 
 		var formattedMsg string
 		if msg.from == user {
@@ -846,6 +874,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() string {
 	var s strings.Builder
 
+	if len(m.messages) > 0 {
+		s.WriteString(m.viewport.View() + "\n\n")
+	}
+
+	searchStatus := "OFF"
+	if m.searchEnabled {
+		searchStatus = "ON"
+	}
+
 	if m.loading {
 		// s.Reset()
 		loadingMessage := ""
@@ -859,11 +896,9 @@ func (m model) View() string {
 		case stateOutputting:
 			loadingMessage = "The LLM is typing"
 		}
-		s.WriteString("\n\n" + loadingMessage + "... " + m.spinner.View() + "\n\n")
-	}
-
-	if len(m.messages) > 0 {
-		s.WriteString(m.viewport.View() + "\n\n")
+		s.WriteString(loadingMessage + "... " + m.spinner.View() + "\n\n")
+	} else {
+		s.WriteString(fmt.Sprintf("Search: %s - ctrl+f to toggle\n\n", searchStatus))
 	}
 
 	s.WriteString(m.textarea.View())
@@ -875,11 +910,6 @@ func (m model) View() string {
 			s.WriteString("j/k or ↑/↓ to scroll • ")
 		}
 	}
-	searchStatus := "OFF"
-	if m.searchEnabled {
-		searchStatus = "ON"
-	}
-	s.WriteString(fmt.Sprintf("search: %s • ctrl+f to toggle • ", searchStatus))
 	s.WriteString("ctrl+o to open browser • ")
 	s.WriteString("ctrl+c to quit)")
 
