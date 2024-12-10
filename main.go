@@ -622,16 +622,15 @@ type chatMsg struct {
 }
 
 type model struct {
-	textarea       textarea.Model
-	spinner        spinner.Model
-	viewport       viewport.Model
-	err            error
-	loading        bool
-	loadingState   loadingState
-	loadingMessage string
-	messages       []string
-	viewportFocus  bool
-	searchEnabled  bool
+	textarea      textarea.Model
+	spinner       spinner.Model
+	viewport      viewport.Model
+	err           error
+	loading       bool
+	loadingState  loadingState
+	messages      []string
+	viewportFocus bool
+	searchEnabled bool
 }
 
 var chatURL string = ""
@@ -658,23 +657,21 @@ func initialModel() model {
 	vp.YPosition = 0
 
 	model := model{
-		textarea:       ti,
-		spinner:        s,
-		viewport:       vp,
-		err:            nil,
-		loading:        false,
-		loadingState:   stateIdle,
-		loadingMessage: "",
-		messages:       []string{},
-		viewportFocus:  false,
-		searchEnabled:  true,
+		textarea:      ti,
+		spinner:       s,
+		viewport:      vp,
+		err:           nil,
+		loading:       false,
+		loadingState:  stateIdle,
+		messages:      []string{},
+		viewportFocus: false,
+		searchEnabled: true,
 	}
 
 	if len(os.Args) > 1 {
 		query := strings.Join(os.Args[1:], " ")
 		model.loading = true
 		model.loadingState = stateSearching
-		model.loadingMessage = "Searching the web"
 
 		// Format user message with proper styling
 		width := vp.Width - 6
